@@ -1,6 +1,12 @@
-# Ooredoo Recharge Automation
+# Ooredoo Recharge Automation 🇹🇳
+
+[![GitHub](https://img.shields.io/badge/GitHub-invictusdhahri%2Fooredoo--recharge--automation-blue?logo=github)](https://github.com/invictusdhahri/ooredoo-recharge-automation)
+[![Python](https://img.shields.io/badge/Python-3.8%2B-blue?logo=python)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 Automated recharge system for Ooredoo Tunisia with AI CAPTCHA solving.
+
+Fully automates the login → CAPTCHA solving → recharge submission flow for [espaceclient.ooredoo.tn](https://espaceclient.ooredoo.tn/).
 
 ## Features
 
