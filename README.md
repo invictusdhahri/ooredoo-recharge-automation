@@ -11,28 +11,43 @@ Fully automates the login → CAPTCHA solving → recharge submission flow for [
 ## Features
 
 - ✅ Automatic login to espaceclient.ooredoo.tn
-- ✅ AI-powered CAPTCHA solving (OpenAI Vision API)
+- ✅ **AI-powered CAPTCHA solving** - FREE options available! (EasyOCR / Tesseract)
 - ✅ Form submission with recharge codes
 - ✅ Response parsing (success/error detection)
-- ✅ Multiple implementation methods (Selenium, Requests)
+- ✅ Multiple implementation methods (Selenium + FREE OCR or OpenAI Vision)
+- 🆓 **No API costs** - use completely free OCR libraries!
 
 ## Files
 
-- **`recharge.py`** - Full Selenium automation (recommended for testing)
-- **`recharge_requests.py`** - Faster requests-only version (TODO)
+### 🆓 FREE Versions (No API costs!)
+- **`recharge_free.py`** - ⭐ **RECOMMENDED** - Uses FREE EasyOCR (best free accuracy)
+- **`recharge_tesseract.py`** - Uses FREE Tesseract OCR (lightweight & fast)
+
+### 💰 Paid Version (Better accuracy)
+- **`recharge.py`** - Uses OpenAI Vision API (~$0.01 per recharge)
+
+### Other
 - **`recharge_openclaw.py`** - OpenClaw browser tool integration
+- **`FREE_CAPTCHA.md`** - Complete guide to free CAPTCHA solving
 
 ## Requirements
 
 ### Python Dependencies
 
+#### 🆓 FREE Version (Recommended)
 ```bash
-pip install selenium requests beautifulsoup4
+pip install selenium beautifulsoup4 easyocr Pillow
+```
+
+#### 💰 Paid Version (OpenAI)
+```bash
+pip install selenium beautifulsoup4 requests
+export OPENAI_API_KEY="sk-..."
 ```
 
 ### Chrome Driver
 
-Selenium version requires ChromeDriver. Install via:
+All versions require ChromeDriver:
 
 ```bash
 # Ubuntu/Debian
@@ -44,25 +59,50 @@ brew install chromedriver
 # Or download from: https://chromedriver.chromium.org/
 ```
 
-### API Keys
+### CAPTCHA Solving Options
 
-For AI CAPTCHA solving, you need an OpenAI API key:
+**Choose one:**
 
-```bash
-export OPENAI_API_KEY="sk-..."
-```
+1. **FREE - EasyOCR** ⭐ (Recommended)
+   ```bash
+   pip install easyocr
+   python3 recharge_free.py <CODE>
+   ```
+
+2. **FREE - Tesseract**
+   ```bash
+   sudo apt install tesseract-ocr  # Linux
+   brew install tesseract          # macOS
+   pip install pytesseract
+   python3 recharge_tesseract.py <CODE>
+   ```
+
+3. **PAID - OpenAI Vision** (Most accurate)
+   ```bash
+   export OPENAI_API_KEY="sk-..."
+   python3 recharge.py <CODE>
+   ```
+
+See **[FREE_CAPTCHA.md](FREE_CAPTCHA.md)** for detailed comparison!
 
 ## Usage
 
-### Method 1: Selenium (Recommended)
+### 🆓 FREE Version (Recommended)
 
 ```bash
-python3 recharge.py <14-DIGIT-RECHARGE-CODE>
+python3 recharge_free.py <14-DIGIT-RECHARGE-CODE>
 ```
 
 **Example:**
 ```bash
-python3 recharge.py 12345678901234
+python3 recharge_free.py 00641977131038
+```
+
+### 💰 OpenAI Version (Better Accuracy)
+
+```bash
+export OPENAI_API_KEY="sk-..."
+python3 recharge.py <14-DIGIT-RECHARGE-CODE>
 ```
 
 ### Method 2: Headless Mode

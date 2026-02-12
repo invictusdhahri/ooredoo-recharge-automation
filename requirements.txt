@@ -1,3 +1,12 @@
 selenium>=4.15.0
 requests>=2.31.0
 beautifulsoup4>=4.12.0
+Pillow>=10.0.0
+
+# FREE CAPTCHA SOLVING OPTIONS (choose one):
+# Option 1: EasyOCR (recommended - best accuracy, GPU optional)
+easyocr>=1.7.0
+
+# Option 2: Tesseract OCR (requires system package)
+pytesseract>=0.3.10
+# Install system package: apt install tesseract-ocr (Linux) or brew install tesseract (macOS)
