@@ -384,7 +384,7 @@ class PaymentAPIMonitor:
         """Format successful payment response"""
         
         response = {
-            'success': True,
+            'success': True if payment_data.get('status') == 'success' else False,
             'status': payment_data.get('status', 'success'),
             'payment_status': payment_data.get('payment_status', 'completed'),
             'message': payment_data.get('message', 'Payment completed'),
@@ -392,15 +392,23 @@ class PaymentAPIMonitor:
                 'order_id': payment_data.get('order_id'),
                 'transaction_id': payment_data.get('transaction_id'),
                 'amount': payment_data.get('amount'),
-                'redirect_url': payment_data.get('url', self.driver.current_url),
+                'redirect_url': payment_data.get('url', self.driver.current_url if self.driver else None),
                 'detection_method': payment_data.get('detection_method', 'redirect_url'),
                 'elapsed_seconds': round(elapsed_seconds, 1)
             },
-            'timestamp': datetime.now().isoformat(),
-            'log_summary': self.logger.get_summary()
+            'timestamp': datetime.now().isoformat()
         }
         
-        self.logger.log_event('PAYMENT_COMPLETED', response)
+        # Log completion without including full response (avoid circular reference)
+        self.logger.log_event('PAYMENT_COMPLETED', {
+            'status': response['status'],
+            'payment_status': response['payment_status'],
+            'order_id': response['data'].get('order_id'),
+            'elapsed_seconds': response['data']['elapsed_seconds']
+        })
+        
+        # Add log summary at the end (after logging completion)
+        response['log_summary'] = self.logger.get_summary()
         
         return response
     
@@ -413,11 +421,17 @@ class PaymentAPIMonitor:
             'payment_status': 'error',
             'error_type': error_type,
             'message': error_message,
-            'timestamp': datetime.now().isoformat(),
-            'log_summary': self.logger.get_summary()
+            'timestamp': datetime.now().isoformat()
         }
         
-        self.logger.log_event('ERROR', response)
+        # Log error without including full response
+        self.logger.log_event('ERROR', {
+            'error_type': error_type,
+            'message': error_message
+        })
+        
+        # Add log summary at the end
+        response['log_summary'] = self.logger.get_summary()
         
         return response
     
@@ -453,11 +467,17 @@ class PaymentAPIMonitor:
                 'timeout_seconds': timeout_seconds,
                 'last_url': last_url
             },
-            'timestamp': datetime.now().isoformat(),
-            'log_summary': self.logger.get_summary()
+            'timestamp': datetime.now().isoformat()
         }
         
-        self.logger.log_event('TIMEOUT', response)
+        # Log timeout without including full response
+        self.logger.log_event('TIMEOUT', {
+            'timeout_seconds': timeout_seconds,
+            'last_url': last_url[:100] + '...' if last_url and len(last_url) > 100 else last_url
+        })
+        
+        # Add log summary at the end
+        response['log_summary'] = self.logger.get_summary()
         
         return response
     
