@@ -141,122 +141,97 @@ class OoredooCreditCardRecharge:
             self.driver.get("https://espaceclient.ooredoo.tn/recharge-online")
             time.sleep(3)
             
-            # Step 3: Select beneficiary number
+            # Step 3: Select beneficiary number (checkbox)
             print(f"📞 Selecting beneficiary: {beneficiary_number}")
             
-            # The number is usually already selected by default if it's the main account number
-            # If there are multiple numbers, they appear in a list
             try:
-                # Try to find a number selection element (could be checkbox or radio)
-                number_selectors = self.driver.find_elements(By.XPATH, f"//*[contains(text(), '{beneficiary_number}')]")
-                
-                if len(number_selectors) > 0:
-                    # Click the element containing the number
-                    for selector in number_selectors:
-                        if selector.is_displayed() and selector.is_enabled():
-                            # Look for associated checkbox/radio button
-                            parent = selector.find_element(By.XPATH, '..')
-                            checkboxes = parent.find_elements(By.CSS_SELECTOR, 'input[type="checkbox"], input[type="radio"]')
-                            
-                            if checkboxes:
-                                # Click the checkbox/radio
-                                self.driver.execute_script("arguments[0].click();", checkboxes[0])
-                                print(f"   ✅ Checked number: {beneficiary_number}")
-                                break
-                            else:
-                                # Click the element itself
-                                self.driver.execute_script("arguments[0].click();", selector)
-                                print(f"   ✅ Selected number: {beneficiary_number}")
-                                break
-                else:
-                    print(f"   ℹ️  Number already selected (default)")
-            except Exception as e:
-                print(f"   ℹ️  Using default number (error: {str(e)[:50]})")
-            
-            time.sleep(2)
-            
-            # Step 4: Select amount
-            print(f"💰 Selecting amount: {amount} TND")
-            
-            # Predefined amounts available in dropdown
-            predefined_amounts = [2, 5, 10, 15, 20, 30, 40, 50]
-            use_custom = amount not in predefined_amounts
-            
-            try:
-                # Find and click the "Montant de la recharge" dropdown button/select
-                print("   Finding amount dropdown...")
-                
-                # Try different possible selectors for the dropdown
-                dropdown = None
-                dropdown_selectors = [
-                    (By.XPATH, "//*[contains(text(), 'Montant de la recharge')]/.."),  # Parent of text
-                    (By.XPATH, "//select[contains(@name, 'montant') or contains(@id, 'montant')]"),  # Select element
-                    (By.XPATH, "//button[contains(text(), 'Montant') or contains(text(), 'montant')]"),  # Button
-                    (By.CSS_SELECTOR, 'div[class*="dropdown"], div[class*="select"]'),  # Dropdown div
+                # The beneficiary checkbox has a value like "21627865121" (country code + number)
+                # Try multiple possible formats
+                possible_values = [
+                    f"216{beneficiary_number}",  # With Tunisia country code
+                    beneficiary_number,          # Just the number
                 ]
                 
-                for selector_type, selector_value in dropdown_selectors:
+                checkbox_found = False
+                for phone_value in possible_values:
                     try:
-                        elements = self.driver.find_elements(selector_type, selector_value)
-                        for elem in elements:
-                            if elem.is_displayed():
-                                dropdown = elem
-                                print(f"   Found dropdown element")
-                                break
-                        if dropdown:
+                        # Find checkbox by value attribute
+                        checkbox = self.driver.find_element(
+                            By.CSS_SELECTOR, 
+                            f'input[type="checkbox"][name*="phones"][value="{phone_value}"]'
+                        )
+                        
+                        if checkbox:
+                            # Check if already checked
+                            if not checkbox.is_selected():
+                                self.driver.execute_script("arguments[0].click();", checkbox)
+                                print(f"   ✅ Checked beneficiary: {beneficiary_number}")
+                            else:
+                                print(f"   ℹ️  Beneficiary already checked: {beneficiary_number}")
+                            checkbox_found = True
                             break
                     except:
                         continue
                 
-                if not dropdown:
-                    print("   ⚠️  Could not find dropdown, trying direct amount input...")
-                    # Try to find the amount input directly
-                    amount_input = self.driver.find_element(By.CSS_SELECTOR, 'input[type="number"], input[type="text"]')
-                    amount_input.clear()
-                    amount_input.send_keys(str(amount))
-                    print(f"   ✅ Entered amount directly: {amount} DT")
-                else:
-                    # Click dropdown to open it
-                    print("   Opening dropdown...")
-                    self.driver.execute_script("arguments[0].click();", dropdown)
-                    time.sleep(2)  # Wait for dropdown to fully open
-                    
-                    if use_custom:
-                        # Click "Autre montant" for custom amounts
-                        print(f"   Looking for 'Autre montant' option...")
-                        autre_montant = self.wait.until(
-                            EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Autre montant') or contains(text(), 'autre montant')]"))
-                        )
-                        self.driver.execute_script("arguments[0].click();", autre_montant)
-                        print("   ✅ Clicked 'Autre montant'")
-                        time.sleep(2)  # Wait for input field to appear
-                        
-                        # Wait for the custom amount input field to become visible
-                        print("   Waiting for custom amount input field...")
-                        amount_input = self.wait.until(
-                            EC.visibility_of_element_located((By.CSS_SELECTOR, 'input[type="text"], input[type="number"]'))
-                        )
-                        
-                        # Clear and enter the amount
-                        amount_input.clear()
-                        time.sleep(0.5)
-                        amount_input.send_keys(str(amount))
-                        print(f"   ✅ Entered custom amount: {amount} DT")
+                if not checkbox_found:
+                    # Fallback: find any checkbox for phones and check the first one
+                    checkboxes = self.driver.find_elements(By.CSS_SELECTOR, 'input[type="checkbox"][name*="phones"]')
+                    if checkboxes:
+                        self.driver.execute_script("arguments[0].click();", checkboxes[0])
+                        print(f"   ✅ Checked first available number")
                     else:
-                        # Click the predefined amount option
-                        print(f"   Looking for predefined amount: {amount} DT")
-                        amount_option = self.wait.until(
-                            EC.element_to_be_clickable((By.XPATH, f"//*[contains(text(), '{amount} DT')]"))
-                        )
-                        self.driver.execute_script("arguments[0].click();", amount_option)
-                        print(f"   ✅ Selected {amount} DT")
+                        print(f"   ℹ️  No checkbox found, number may be pre-selected")
+                        
+            except Exception as e:
+                print(f"   ⚠️  Checkbox selection error: {str(e)[:80]}")
+            
+            time.sleep(1)
+            
+            # Step 4: Select amount from <select> dropdown
+            print(f"💰 Selecting amount: {amount} TND")
+            
+            # Predefined amounts available: 5, 10, 15, 20, 30, 40, 50, other
+            predefined_amounts = [5, 10, 15, 20, 30, 40, 50]
+            use_custom = amount not in predefined_amounts
+            
+            try:
+                from selenium.webdriver.support.select import Select
+                
+                # Find the select element by name or id
+                print("   Finding price select dropdown...")
+                select_element = self.wait.until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, 'select[name*="price"]'))
+                )
+                
+                # Create Select object
+                select = Select(select_element)
+                
+                if use_custom:
+                    # Select "Autre montant" (value="other")
+                    print(f"   Selecting 'Autre montant' for custom amount: {amount} DT")
+                    select.select_by_value('other')
+                    time.sleep(1)  # Wait for custom input field to appear
+                    
+                    # Find and fill the custom amount input field
+                    print("   Entering custom amount...")
+                    custom_input = self.wait.until(
+                        EC.visibility_of_element_located((By.CSS_SELECTOR, 'input[name*="price_other"], input[id*="price_other"]'))
+                    )
+                    custom_input.clear()
+                    custom_input.send_keys(str(amount))
+                    print(f"   ✅ Entered custom amount: {amount} DT")
+                else:
+                    # Select predefined amount by value
+                    print(f"   Selecting predefined amount: {amount} DT")
+                    select.select_by_value(str(amount))
+                    print(f"   ✅ Selected {amount} DT")
                     
             except Exception as amount_error:
-                print(f"   ❌ Amount selection error: {str(amount_error)[:100]}")
+                print(f"   ❌ Amount selection error: {str(amount_error)[:200]}")
                 print("   Taking screenshot for debugging...")
                 try:
                     self.driver.save_screenshot('/tmp/ooredoo_amount_error.png')
-                    print("   Screenshot saved to /tmp/ooredoo_amount_error.png")
+                    print(f"   Screenshot saved: /tmp/ooredoo_amount_error.png")
                 except:
                     pass
                 raise
