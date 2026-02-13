@@ -236,13 +236,40 @@ class OoredooCreditCardRecharge:
             payment_url = None
             
             # Wait for navigation to complete
-            time.sleep(3)
+            time.sleep(5)
             
             # Check current URL first (might have been redirected)
             current_url = self.driver.current_url
+            print(f"   Current URL after click: {current_url}")
+            
             if 'ipay' in current_url or 'clictopay' in current_url:
                 print("✅ Payment URL obtained from browser redirect!")
                 payment_url = current_url
+            else:
+                # Try to find redirect URL in page source
+                print("   Checking page source for payment URL...")
+                page_source = self.driver.page_source
+                print(f"   Page source length: {len(page_source)} chars")
+                
+                # Look for meta refresh tag with URL
+                import re
+                meta_refresh = re.search(r'<meta[^>]*http-equiv=["\']?refresh["\']?[^>]*content=["\']?\d+;\s*url=([^"\'>\s]+)', page_source, re.IGNORECASE)
+                if meta_refresh:
+                    payment_url = meta_refresh.group(1)
+                    payment_url = payment_url.replace('&amp;', '&')
+                    print("   ✅ Found payment URL in meta refresh tag!")
+                    print(f"   URL: {payment_url[:80]}...")
+                else:
+                    # Try broader ipay search
+                    ipay_match = re.search(r'https?://[^"\s<>]*ipay[^"\s<>]*', page_source, re.IGNORECASE)
+                    if ipay_match:
+                        payment_url = ipay_match.group(0)
+                        # Clean up HTML entities
+                        payment_url = payment_url.replace('&amp;', '&')
+                        # Remove any trailing HTML
+                        payment_url = payment_url.split('"')[0].split("'")[0].split('<')[0]
+                        print("   ✅ Found payment URL in page source!")
+                        print(f"   URL: {payment_url[:80]}...")
             
             # If we got the payment URL, return success
             if payment_url:
