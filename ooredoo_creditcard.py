@@ -93,8 +93,8 @@ class OoredooCreditCardRecharge:
             password_field.clear()
             password_field.send_keys(password)
             
-            # Click login button
-            login_btn = self.driver.find_element(By.XPATH, "//button[contains(text(), 'LOGIN')]")
+            # Click login button (it's an input type="submit", not a button element)
+            login_btn = self.driver.find_element(By.CSS_SELECTOR, 'input[type="submit"].form-submit')
             self.driver.execute_script("arguments[0].click();", login_btn)
             
             time.sleep(4)
@@ -157,15 +157,51 @@ class OoredooCreditCardRecharge:
             
             time.sleep(2)
             
-            # Step 4: Enter amount
-            print(f"💰 Entering amount: {amount} TND")
+            # Step 4: Select amount
+            print(f"💰 Selecting amount: {amount} TND")
             
-            # Look for amount input field
-            amount_input = self.wait.until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, 'input[type="text"], input[type="number"]'))
-            )
-            amount_input.clear()
-            amount_input.send_keys(str(amount))
+            # Predefined amounts available in dropdown
+            predefined_amounts = [2, 5, 10, 15, 20, 30, 40, 50]
+            use_custom = amount not in predefined_amounts
+            
+            try:
+                # Click the dropdown to open it
+                print("   Opening amount dropdown...")
+                dropdown = self.wait.until(
+                    EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Montant de la recharge')]"))
+                )
+                self.driver.execute_script("arguments[0].click();", dropdown)
+                time.sleep(1)
+                
+                if use_custom:
+                    # Click "Autre montant" for custom amounts
+                    print(f"   Selecting 'Autre montant' for custom amount: {amount} DT")
+                    autre_montant = self.wait.until(
+                        EC.element_to_be_clickable((By.XPATH, "//*[contains(text(), 'Autre montant')]"))
+                    )
+                    self.driver.execute_script("arguments[0].click();", autre_montant)
+                    time.sleep(1)
+                    
+                    # Enter the custom amount in the input field
+                    amount_input = self.wait.until(
+                        EC.element_to_be_clickable((By.CSS_SELECTOR, 'input[type="text"], input[type="number"]'))
+                    )
+                    amount_input.clear()
+                    time.sleep(0.5)
+                    amount_input.send_keys(str(amount))
+                    print(f"   ✅ Entered custom amount: {amount} DT")
+                else:
+                    # Click the predefined amount option
+                    print(f"   Selecting predefined amount: {amount} DT")
+                    amount_option = self.wait.until(
+                        EC.element_to_be_clickable((By.XPATH, f"//*[contains(text(), '{amount} DT')]"))
+                    )
+                    self.driver.execute_script("arguments[0].click();", amount_option)
+                    print(f"   ✅ Selected {amount} DT")
+                    
+            except Exception as amount_error:
+                print(f"   ⚠️  Amount selection error: {amount_error}")
+                raise
             
             time.sleep(1)
             
