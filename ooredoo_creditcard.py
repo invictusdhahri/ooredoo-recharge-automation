@@ -223,83 +223,26 @@ class OoredooCreditCardRecharge:
                 EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Valider')]"))
             )
             
-            # Set up network interception BEFORE clicking
-            print("🔍 Setting up response interceptor...")
-            self.driver.execute_script("""
-                window.capturedPaymentUrl = null;
-                
-                // Intercept fetch
-                const originalFetch = window.fetch;
-                window.fetch = function(...args) {
-                    return originalFetch(...args).then(response => {
-                        const clonedResponse = response.clone();
-                        
-                        if (args[0].includes('recharge-online-validate') || args[0].includes('ipay')) {
-                            clonedResponse.text().then(data => {
-                                // Look for ipay URL in response
-                                const ipayMatch = data.match(/https?:\\/\\/[^\\s"'<>]*ipay[^\\s"'<>]*/);
-                                if (ipayMatch) {
-                                    window.capturedPaymentUrl = ipayMatch[0];
-                                    console.log('✅ Payment URL captured:', window.capturedPaymentUrl);
-                                }
-                            }).catch(() => {});
-                        }
-                        
-                        return response;
-                    });
-                };
-                
-                // Intercept XHR
-                const originalOpen = XMLHttpRequest.prototype.open;
-                const originalSend = XMLHttpRequest.prototype.send;
-                
-                XMLHttpRequest.prototype.open = function(method, url) {
-                    this._url = url;
-                    return originalOpen.apply(this, arguments);
-                };
-                
-                XMLHttpRequest.prototype.send = function() {
-                    this.addEventListener('load', function() {
-                        if ((this._url.includes('recharge-online-validate') || this._url.includes('ipay')) && this.status === 200) {
-                            try {
-                                const data = this.responseText;
-                                // Look for ipay URL
-                                const ipayMatch = data.match(/https?:\\/\\/[^\\s"'<>]*ipay[^\\s"'<>]*/);
-                                if (ipayMatch) {
-                                    window.capturedPaymentUrl = ipayMatch[0];
-                                    console.log('✅ Payment URL captured:', window.capturedPaymentUrl);
-                                }
-                            } catch (e) {}
-                        }
-                    });
-                    return originalSend.apply(this, arguments);
-                };
-            """)
+            # Set up network logging to capture the redirect
+            print("🔍 Enabling network logging...")
+            self.driver.execute_cdp_cmd('Network.enable', {})
             
             # Click confirm button
+            print("💳 Clicking final Valider button...")
             self.driver.execute_script("arguments[0].click();", valider_confirm)
             
-            # Step 7: Capture payment URL
-            print("⏳ Waiting for payment URL...")
+            # Step 7: Wait for redirect and capture URL
+            print("⏳ Waiting for redirect to payment...")
             payment_url = None
             
-            # Poll for captured payment URL (from our JavaScript interceptor)
-            for i in range(20):  # 10 seconds total (20 x 0.5s)
-                time.sleep(0.5)
-                captured_url = self.driver.execute_script("return window.capturedPaymentUrl;")
-                
-                if captured_url:
-                    payment_url = captured_url
-                    print(f"✅ Payment URL captured from interceptor!")
-                    break
+            # Wait for navigation to complete
+            time.sleep(3)
             
-            # If interceptor didn't catch it, check if redirected
-            if not payment_url:
-                time.sleep(2)
-                current_url = self.driver.current_url
-                if 'ipay' in current_url or 'payment' in current_url:
-                    print("✅ Payment URL obtained from redirect!")
-                    payment_url = current_url
+            # Check current URL first (might have been redirected)
+            current_url = self.driver.current_url
+            if 'ipay' in current_url or 'clictopay' in current_url:
+                print("✅ Payment URL obtained from browser redirect!")
+                payment_url = current_url
             
             # If we got the payment URL, return success
             if payment_url:
