@@ -213,9 +213,10 @@ class OoredooCreditCardRecharge:
                     time.sleep(1)  # Wait for custom input field to appear
                     
                     # Find and fill the custom amount input field
+                    # Input has name="RechargeOnline[recharges][recharge1][amount]"
                     print("   Entering custom amount...")
                     custom_input = self.wait.until(
-                        EC.visibility_of_element_located((By.CSS_SELECTOR, 'input[name*="price_other"], input[id*="price_other"]'))
+                        EC.visibility_of_element_located((By.CSS_SELECTOR, 'input[name*="amount"].other-mount-field, input[id*="amount"]'))
                     )
                     custom_input.clear()
                     custom_input.send_keys(str(amount))
