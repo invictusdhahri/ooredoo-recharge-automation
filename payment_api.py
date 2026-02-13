@@ -123,30 +123,68 @@ class PaymentAPIMonitor:
         current_url = initial_url
         check_count = 0
         
+        # Track all seen URLs
+        seen_urls = set([initial_url])
+        
         while time.time() - start_time < timeout_seconds:
             check_count += 1
-            time.sleep(2)  # Check every 2 seconds
+            time.sleep(1)  # Check every 1 second (faster polling)
             
             elapsed = time.time() - start_time
             
             try:
-                new_url = self.driver.current_url
+                # Get current URL via JavaScript (more reliable)
+                new_url = self.driver.execute_script("return window.location.href;")
                 
                 # Log periodic check
-                if check_count % 15 == 0:  # Every 30 seconds
+                if check_count % 10 == 0:  # Every 10 seconds
                     self.logger.log_event('MONITORING_CHECK', {
                         'check_number': check_count,
                         'elapsed_seconds': round(elapsed, 1),
-                        'current_url': new_url[:100] + '...' if len(new_url) > 100 else new_url
+                        'current_url': new_url[:100] + '...' if len(new_url) > 100 else new_url,
+                        'seen_urls_count': len(seen_urls)
                     })
                 
+                # Check all iframes for redirects (3DS often uses iframes)
+                try:
+                    iframe_urls = self.driver.execute_script("""
+                        var urls = [];
+                        var iframes = document.getElementsByTagName('iframe');
+                        for (var i = 0; i < iframes.length; i++) {
+                            try {
+                                if (iframes[i].contentWindow && iframes[i].contentWindow.location) {
+                                    urls.push(iframes[i].contentWindow.location.href);
+                                }
+                            } catch(e) {
+                                // Cross-origin iframe, skip
+                            }
+                        }
+                        return urls;
+                    """)
+                    
+                    if iframe_urls:
+                        for iframe_url in iframe_urls:
+                            if iframe_url not in seen_urls and 'espaceclient.ooredoo' in iframe_url:
+                                self.logger.log_event('IFRAME_REDIRECT_DETECTED', {
+                                    'iframe_url': iframe_url,
+                                    'elapsed_seconds': round(elapsed, 1)
+                                })
+                                
+                                redirect_result = self._parse_redirect(iframe_url)
+                                if redirect_result['status'] != 'unknown':
+                                    return self._success_response(redirect_result, elapsed)
+                except Exception as iframe_error:
+                    pass  # Iframe check failed, continue
+                
                 # URL changed - redirect detected
-                if new_url != current_url:
+                if new_url != current_url and new_url not in seen_urls:
                     self.logger.log_event('REDIRECT_DETECTED', {
                         'from_url': current_url[:100] + '...' if len(current_url) > 100 else current_url,
                         'to_url': new_url,
                         'elapsed_seconds': round(elapsed, 1)
                     })
+                    
+                    seen_urls.add(new_url)
                     
                     # Parse redirect for payment status
                     redirect_result = self._parse_redirect(new_url)
@@ -156,6 +194,18 @@ class PaymentAPIMonitor:
                         return self._success_response(redirect_result, elapsed)
                     
                     current_url = new_url
+                
+                # Check if we're already on Ooredoo's success/fail page (in case we missed redirect)
+                if 'espaceclient.ooredoo' in new_url:
+                    self.logger.log_event('OOREDOO_PAGE_DETECTED', {
+                        'url': new_url,
+                        'elapsed_seconds': round(elapsed, 1)
+                    })
+                    
+                    # Force parse this URL
+                    redirect_result = self._parse_redirect(new_url)
+                    if redirect_result['status'] != 'unknown':
+                        return self._success_response(redirect_result, elapsed)
                 
                 # Check page content for success/failure indicators
                 page_result = self._check_page_content()
@@ -226,16 +276,28 @@ class PaymentAPIMonitor:
                 break
         
         # Check redirect domain for Ooredoo success/fail pages
-        if 'espaceclient.ooredoo' in parsed.netloc:
-            if 'success' in parsed.path.lower():
+        if 'espaceclient.ooredoo' in parsed.netloc or 'ooredoo.tn' in parsed.netloc:
+            # Check path for success/fail indicators
+            path_lower = parsed.path.lower()
+            
+            if 'success' in path_lower or 'payment-success' in path_lower:
                 result['status'] = 'success'
                 result['payment_status'] = 'completed'
                 result['message'] = 'Redirected to Ooredoo success page'
                 
-            elif 'fail' in parsed.path.lower() or 'error' in parsed.path.lower():
+            elif 'fail' in path_lower or 'error' in path_lower or 'payment-fail' in path_lower:
                 result['status'] = 'failed'
                 result['payment_status'] = 'failed'
                 result['message'] = 'Redirected to Ooredoo failure page'
+            
+            # Even if path doesn't clearly indicate, check query params
+            elif not result['status'] or result['status'] == 'unknown':
+                # We're on Ooredoo domain but no clear path indicator
+                # Check if params give us a clue
+                if params:
+                    result['status'] = 'success'  # Assume success if we got redirected with params
+                    result['payment_status'] = 'completed'
+                    result['message'] = 'Redirected to Ooredoo with transaction details'
         
         # Extract additional info
         if 'orderId' in params:
@@ -362,6 +424,26 @@ class PaymentAPIMonitor:
     def _timeout_response(self, timeout_seconds):
         """Format timeout response"""
         
+        last_url = None
+        try:
+            if self.driver:
+                last_url = self.driver.execute_script("return window.location.href;")
+                
+                # If we timed out but we're on Ooredoo's page, try to parse it
+                if last_url and 'espaceclient.ooredoo' in last_url:
+                    self.logger.log_event('TIMEOUT_ON_OOREDOO_PAGE', {
+                        'url': last_url,
+                        'attempting_parse': True
+                    })
+                    
+                    # Try to parse the URL we ended up on
+                    redirect_result = self._parse_redirect(last_url)
+                    if redirect_result['status'] != 'unknown':
+                        # We found the status even though we timed out!
+                        return self._success_response(redirect_result, timeout_seconds)
+        except Exception as e:
+            self.logger.log_event('TIMEOUT_URL_CHECK_ERROR', {'error': str(e)})
+        
         response = {
             'success': False,
             'status': 'timeout',
@@ -369,7 +451,7 @@ class PaymentAPIMonitor:
             'message': f'Payment monitoring timed out after {timeout_seconds} seconds',
             'data': {
                 'timeout_seconds': timeout_seconds,
-                'last_url': self.driver.current_url if self.driver else None
+                'last_url': last_url
             },
             'timestamp': datetime.now().isoformat(),
             'log_summary': self.logger.get_summary()
